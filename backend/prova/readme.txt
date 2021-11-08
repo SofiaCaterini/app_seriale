@@ -1,1 +1,0 @@
-C:\Users\work\Desktop\app_seriale\backend\prova>python3 -m miniterm com4 115200 --rtscts
