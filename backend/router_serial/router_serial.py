@@ -17,7 +17,7 @@ class PrintLines(LineReader):
     def connection_made(self, transport):
         super(PrintLines, self).connection_made(transport)
         sys.stdout.write('port opened\n')
-        # self.write_line('hello world')
+        # write(self, b"atcl 0003 8202 00 00\r")
 
     # def data_received(self, data):
     # sys.stdout.write('data: {}\n'.format(repr(data)))
@@ -50,11 +50,8 @@ class PrintLines(LineReader):
     def send_command(self, cmd):
         if self._fut:  # (se il future non è vuoto)
             raise ValueError("called twice")
-
-        print("cmd", cmd.encode('utf8'))
-        print("cmdnotencode", cmd)
         self._fut = asyncio.get_running_loop().create_future()
-        write(self.protocol, cmd.encode('ascii'))
+        write(self, cmd.encode('ascii'))
         return self._fut
 
 
@@ -68,7 +65,7 @@ async def consumer():
     ser.exclusive = True
 
     with ReaderThread(ser, PrintLines) as protocol:
-        # write(b"atcl 0003 8202 01 00\r")
+        # write(protocol, b"atcl 0003 8202 00 00\r")
         time.sleep(100)
 
     while True:
@@ -81,7 +78,7 @@ async def consumer():
 def write(protocol, data):
     for b in data:
         b = bytes([b])
-        print("w", b)
+        # print("w", b)
         protocol.transport.write(b)
         time.sleep(0.01)
 
@@ -93,14 +90,13 @@ def main():
 
 @router.on_event("startup")
 def start_consumer():
-    asyncio.create_task(consumer())
+    pass
 
 
-'''
 @router.get("/test_future")
 async def test_future():
     task = {
         "data": "atcl 0003 8202 01 00\r",
         "fut": asyncio.get_running_loop().create_future()}
     await q.put(task)
-    print(await task["fut"])'''
+    print(await task["fut"])
