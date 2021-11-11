@@ -10,6 +10,11 @@ from starlette.responses import RedirectResponse
 q = asyncio.Queue()
 router = FastAPI()
 
+DeviceAttivi = []
+
+Event = {}
+Events = []
+
 
 class PrintLines(LineReader):
     _fut = None
@@ -29,15 +34,43 @@ class PrintLines(LineReader):
             # write(b"hello2\r")
 
         if "ANS" in data:
-            print("Answer!")
+            # print("Answer!")
             if self._fut is not None:
                 self._fut.set_result(data)
                 self._fut = None
             else:
                 pass
         if "EVT" in data:
-            print("Evt!")
+            # print("Evt!")
+            # prende lista device attivi
+            addrstr = "srcAddr = "
+            # print(data[(data.find(addrstr) + len(addrstr)):(data.find(addrstr) + len(addrstr) + 2)])
+            devAttivo = data[(data.find(addrstr) + len(addrstr)):(data.find(addrstr) + len(addrstr) + 2)]
+            if devAttivo not in DeviceAttivi:
+                DeviceAttivi.append(devAttivo)
+            print(DeviceAttivi)
             # manda gli eventi a mqtt
+            valuestr = "value = "
+            # print(data[(data.find(valuestr) + len(valuestr)):(data.find(valuestr) + len(valuestr) + 2)])
+            valueactual = data[(data.find(valuestr) + len(valuestr)):(data.find(valuestr) + len(valuestr) + 2)]
+
+            idstr = "type = "
+            idactual = data[(data.find(idstr) + len(idstr)):(data.find(idstr) + len(idstr) + 4)]
+            new = Event.copy()
+            new["Id"] = "Sensor"
+            new["Addr"] = devAttivo
+            new["Type"] = idactual
+            new["Value"] = valueactual
+            # if Event["Addr"] not in Events:
+            if new not in Events:
+                Events.append(new)
+            # se è presente un evento che arriva dallo stesso device ma con valore diverso
+            for index, value in enumerate(Events):
+                if value["Addr"] == new["Addr"] and value["Value"] != new["Value"]:
+                    Events[index] = new
+                    Events.remove(new)
+            print(Events)
+
         else:
 
             pass
@@ -65,14 +98,11 @@ async def consumer():
     ser.exclusive = True
 
     with ReaderThread(ser, PrintLines) as protocol:
-        # write(protocol, b"atcl 0003 8202 00 00\r")
-        time.sleep(100)
-
-    while True:
-        task = await q.get()
-        print("task:", task["data"])
-        res = await protocol.send_command(task["data"])
-        task["fut"].set_result(res)
+        while True:
+            task = await q.get()
+            print("task:", task["data"])
+            res = await protocol.send_command(task["data"])
+            task["fut"].set_result(res)
 
 
 def write(protocol, data):
@@ -90,7 +120,8 @@ def main():
 
 @router.on_event("startup")
 def start_consumer():
-    pass
+    asyncio.create_task(consumer())
+    # print("pippo")
 
 
 @router.get("/test_future")
