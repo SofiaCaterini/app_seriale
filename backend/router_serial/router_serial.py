@@ -11,7 +11,6 @@ q = asyncio.Queue()
 router = FastAPI()
 
 DeviceAttivi = []
-
 Event = {}
 Events = []
 
