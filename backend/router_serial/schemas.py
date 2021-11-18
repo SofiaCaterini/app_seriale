@@ -1,10 +1,26 @@
+
+from typing import List, Optional
 from pydantic import BaseModel
 
 
-class Device(BaseModel):
-    addr: int
+class DeviceBase(BaseModel):
+    id: str
+    status: str
     sensor_type: str
-    value: int
+
+
+
+class DeviceCreate(DeviceBase):
+    pass
+
+
+class Device(DeviceBase):
+    pass
 
     class Config:
         orm_mode = True
+
+
+class Transaction(BaseModel):
+    status: bool
+    message: str

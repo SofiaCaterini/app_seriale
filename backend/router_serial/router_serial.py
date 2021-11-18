@@ -4,15 +4,43 @@ import traceback
 import time
 import serial
 from fastapi import FastAPI
+from typing import List
+
+from sqlalchemy import true
+from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException
 from serial.threaded import LineReader, ReaderThread
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import RedirectResponse
+
+from . import models, schemas, crud
+from .database import Session, engine
+from .models import Device
+
+models.Base.metadata.create_all(bind=engine)
 
 q = asyncio.Queue()
 router = FastAPI()
 
 DeviceAttivi = []
-Event = {}
-Events = []
+Devices = []
+
+router.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
+
+# Dependency
+def get_db():
+    try:
+        db = Session()
+        yield db
+    finally:
+        db.close()
 
 
 class PrintLines(LineReader):
@@ -21,10 +49,6 @@ class PrintLines(LineReader):
     def connection_made(self, transport):
         super(PrintLines, self).connection_made(transport)
         sys.stdout.write('port opened\n')
-        # write(self, b"atcl 0003 8202 00 00\r")
-
-    # def data_received(self, data):
-    # sys.stdout.write('data: {}\n'.format(repr(data)))
 
     def handle_line(self, data):
         sys.stdout.write('line received: {}\n'.format(repr(data)))
@@ -45,30 +69,22 @@ class PrintLines(LineReader):
             addrstr = "srcAddr = "
             # print(data[(data.find(addrstr) + len(addrstr)):(data.find(addrstr) + len(addrstr) + 2)])
             devAttivo = data[(data.find(addrstr) + len(addrstr)):(data.find(addrstr) + len(addrstr) + 2)]
-            if devAttivo not in DeviceAttivi:
-                DeviceAttivi.append(devAttivo)
-            print(DeviceAttivi)
-            # manda gli eventi a mqtt
             valuestr = "value = "
             # print(data[(data.find(valuestr) + len(valuestr)):(data.find(valuestr) + len(valuestr) + 2)])
             valueactual = data[(data.find(valuestr) + len(valuestr)):(data.find(valuestr) + len(valuestr) + 2)]
 
-            idstr = "type = "
-            idactual = data[(data.find(idstr) + len(idstr)):(data.find(idstr) + len(idstr) + 4)]
-            new = Event.copy()
-            new["Id"] = "Sensor"
-            new["Addr"] = devAttivo
-            new["Type"] = idactual
-            new["Value"] = valueactual
-            # if Event["Addr"] not in Events:
-            if new not in Events:
-                Events.append(new)
-            # se è presente un evento che arriva dallo stesso device ma con valore diverso
-            for index, value in enumerate(Events):
-                if value["Addr"] == new["Addr"] and value["Value"] != new["Value"]:
-                    Events[index] = new
-                    Events.remove(new)
-            print(Events)
+            typestr = "type = "
+            typeactual = data[(data.find(typestr) + len(typestr)):(data.find(typestr) + len(typestr) + 4)]
+
+            if devAttivo not in DeviceAttivi:
+                DeviceAttivi.append(devAttivo)
+                newDevice = Device(id=devAttivo, status="ON", sensor_type=typeactual)
+                Devices.append(newDevice)
+                with Session() as session:
+                    create(session, Device, id=devAttivo, status="ON", sensor_type=typeactual)
+            print(DeviceAttivi)
+            # manda gli eventi a mqtt
+
 
         else:
 
@@ -123,6 +139,12 @@ def start_consumer():
     # print("pippo")
 
 
+@router.get("/devices/", response_model=List[schemas.Device])
+def read_devices(db: Session = Depends(get_db)):
+    items = crud.get_devices(db)
+    return items
+
+
 @router.get("/test_future")
 async def test_future():
     task = {
@@ -130,3 +152,24 @@ async def test_future():
         "fut": asyncio.get_running_loop().create_future()}
     await q.put(task)
     print(await task["fut"])
+
+
+@router.get("/devices/{id}", response_model=schemas.Device)
+async def read_device(id: str, db: Session = Depends(get_db)):
+    item = crud.get_device(db=db, id=id)
+    print(id)
+    task = {
+        "data": "atcl 00" + id + " 8202 01 00\r",
+        "fut": asyncio.get_running_loop().create_future()}
+    await q.put(task)
+    print(await task["fut"])
+
+
+def create(session, model, **kwargs):
+    instance = session.query(model).filter_by(**kwargs).first()
+    if instance:
+        pass
+    else:
+        instance = model(**kwargs)
+        session.add(instance)
+        session.commit()
