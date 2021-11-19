@@ -24,7 +24,6 @@ models.Base.metadata.create_all(bind=engine)
 q = asyncio.Queue()
 router = FastAPI()
 
-DeviceAttivi = []
 Devices = []
 
 router.add_middleware(
@@ -51,16 +50,6 @@ class PrintLines(LineReader):
     def connection_made(self, transport):
         super(PrintLines, self).connection_made(transport)
         sys.stdout.write('port opened\n')
-        # prove sul timestamp
-        start_time = 1637249952.869202
-        end_time = time.time()
-        time1 = datetime.datetime.fromtimestamp(start_time)
-        time2 = datetime.datetime.fromtimestamp(end_time)
-        time_difference = time2 - time1
-        if time_difference.total_seconds() > 30:
-            print("magg")
-        print(time_difference)
-        print(time.time())
 
     def handle_line(self, data):
         sys.stdout.write('line received: {}\n'.format(repr(data)))
@@ -76,6 +65,8 @@ class PrintLines(LineReader):
             else:
                 pass
         if "EVT" in data:
+            # asyncio.run(start_count())
+
             # print("Evt!")
             # prende lista device attivi
             addrstr = "srcAddr = "
@@ -156,6 +147,7 @@ def main():
 @router.on_event("startup")
 def start_consumer():
     asyncio.create_task(consumer())
+    asyncio.create_task(control_status(20, Devices))
 
 
 @router.get("/devices/", response_model=List[schemas.Device])
@@ -184,18 +176,6 @@ async def read_device(id: str, db: Session = Depends(get_db)):
     print(await task["fut"])
 
 
-'''
-def create(session, model, **kwargs):
-    instance = session.query(model).filter_by(**kwargs).first()
-    if instance:
-        pass
-    else:
-        instance = model(**kwargs)
-        session.add(instance)
-        session.commit()
-'''
-
-
 def create(session, model, Device):
     instance = session.query(model).filter_by(id=Device.id).first()
     if instance:
@@ -216,11 +196,44 @@ def update(session, id, str):
         return {"status": False, "message": "No such record"}
 
 
-async def control_status():
-    while true:
-        await asyncio.sleep(10)
+def update_status(session, id):
+    off = 'OFF'
+    if session.query(models.Device).get(id):
+        session.query(models.Device).filter_by(id=id).update({'status': off})
+        session.flush()
+        session.commit()
+        return {"status": True, "message": f"Record {id} deleted"}
+    else:
+        return {"status": False, "message": "No such record"}
 
 
 def time_as_string(actual_time):
-    time_string = time.strftime("%m/%d/%Y, %H:%M:%S", actual_time)
+    time_string = time.strftime("%d/%m/%Y, %H:%M:%S", actual_time)
     return time_string
+
+
+def sec_between_time(timestr1, timestr2):
+    # ate = time_as_string(time.localtime())
+    # convert string to datetimeformat
+    date1 = datetime.datetime.strptime(timestr1, "%d/%m/%Y, %H:%M:%S")
+    date2 = datetime.datetime.strptime(timestr2, "%d/%m/%Y, %H:%M:%S")
+    # convert datetime to timestamp
+    time1 = datetime.datetime.timestamp(date1)
+    time2 = datetime.datetime.timestamp(date2)
+    time1 = datetime.datetime.fromtimestamp(time1)
+    time2 = datetime.datetime.fromtimestamp(time2)
+    time_difference = time2 - time1
+    return time_difference.total_seconds()
+
+
+async def control_status(delay, listdev):
+    while true:
+        await asyncio.sleep(delay)
+        for index, dev in enumerate(listdev):
+            if sec_between_time(dev.time_last_measurement, time_as_string(time.localtime())) > delay / 2:
+                print("off")
+                with Session() as session:
+                    update_status(session, dev.id)
+            else:
+                print("on")
+        print("check")
