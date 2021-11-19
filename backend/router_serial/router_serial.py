@@ -196,10 +196,9 @@ def update(session, id, str):
         return {"status": False, "message": "No such record"}
 
 
-def update_status(session, id):
-    off = 'OFF'
+def update_status(session, id, str):
     if session.query(models.Device).get(id):
-        session.query(models.Device).filter_by(id=id).update({'status': off})
+        session.query(models.Device).filter_by(id=id).update({'status': str})
         session.flush()
         session.commit()
         return {"status": True, "message": f"Record {id} deleted"}
@@ -233,7 +232,9 @@ async def control_status(delay, listdev):
             if sec_between_time(dev.time_last_measurement, time_as_string(time.localtime())) > delay / 2:
                 print("off")
                 with Session() as session:
-                    update_status(session, dev.id)
+                    update_status(session, dev.id, "OFF")
             else:
                 print("on")
+                with Session() as session:
+                    update_status(session, dev.id, "ON")
         print("check")
