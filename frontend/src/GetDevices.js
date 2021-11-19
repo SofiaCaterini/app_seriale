@@ -39,6 +39,12 @@ const GetDevices = (params) => {
                 <TableCell>
                     {" "}
                     <a href={el.url} target="_blank">
+                        {el.time_last_measurement}
+                    </a>
+                </TableCell>
+                <TableCell>
+                    {" "}
+                    <a href={el.url} target="_blank">
                         {el.sensor_type}
                     </a>
                 </TableCell>
@@ -67,6 +73,7 @@ const GetDevices = (params) => {
                             <TableRow>
                                 <TableCell>ID</TableCell>
                                 <TableCell>STATUS</TableCell>
+                                <TableCell>LAST MEASUREMENT</TableCell>
                                 <TableCell>SENSOR TYPE</TableCell>
                                 <TableCell/>
                             </TableRow>

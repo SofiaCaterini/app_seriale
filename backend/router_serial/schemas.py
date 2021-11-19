@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class DeviceBase(BaseModel):
     id: str
     status: str
+    time_last_measurement: str
     sensor_type: str
 
 

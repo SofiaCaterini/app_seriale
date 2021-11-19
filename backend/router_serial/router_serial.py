@@ -2,6 +2,8 @@ import asyncio
 import sys
 import traceback
 import time
+import datetime
+
 import serial
 from fastapi import FastAPI
 from typing import List
@@ -49,6 +51,16 @@ class PrintLines(LineReader):
     def connection_made(self, transport):
         super(PrintLines, self).connection_made(transport)
         sys.stdout.write('port opened\n')
+        # prove sul timestamp
+        start_time = 1637249952.869202
+        end_time = time.time()
+        time1 = datetime.datetime.fromtimestamp(start_time)
+        time2 = datetime.datetime.fromtimestamp(end_time)
+        time_difference = time2 - time1
+        if time_difference.total_seconds() > 30:
+            print("magg")
+        print(time_difference)
+        print(time.time())
 
     def handle_line(self, data):
         sys.stdout.write('line received: {}\n'.format(repr(data)))
@@ -75,16 +87,24 @@ class PrintLines(LineReader):
 
             typestr = "type = "
             typeactual = data[(data.find(typestr) + len(typestr)):(data.find(typestr) + len(typestr) + 4)]
+            time_misura = time.localtime()
+            newDevice = Device(id=devAttivo, status="ON", time_last_measurement=time_as_string(time_misura),
+                               sensor_type=typeactual)
+            # Devices.append(newDevice)
 
-            if devAttivo not in DeviceAttivi:
-                DeviceAttivi.append(devAttivo)
-                newDevice = Device(id=devAttivo, status="ON", sensor_type=typeactual)
-                Devices.append(newDevice)
-                with Session() as session:
-                    create(session, Device, id=devAttivo, status="ON", sensor_type=typeactual)
-            print(DeviceAttivi)
+            Devices.append(newDevice)
+            for index, dev in enumerate(Devices):
+                if dev.id == devAttivo and dev.time_last_measurement == time_as_string(time_misura):
+                    with Session() as session:
+                        create(session, Device, newDevice)
+                if dev.id == devAttivo and dev.time_last_measurement != time_as_string(time_misura):
+                    Devices[index] = newDevice
+                    Devices.pop(len(Devices) - 1)
+                    with Session() as session:
+                        update(session, devAttivo, time_as_string(time_misura))
+
+            print(Devices)
             # manda gli eventi a mqtt
-
 
         else:
 
@@ -136,7 +156,6 @@ def main():
 @router.on_event("startup")
 def start_consumer():
     asyncio.create_task(consumer())
-    # print("pippo")
 
 
 @router.get("/devices/", response_model=List[schemas.Device])
@@ -165,6 +184,7 @@ async def read_device(id: str, db: Session = Depends(get_db)):
     print(await task["fut"])
 
 
+'''
 def create(session, model, **kwargs):
     instance = session.query(model).filter_by(**kwargs).first()
     if instance:
@@ -173,3 +193,34 @@ def create(session, model, **kwargs):
         instance = model(**kwargs)
         session.add(instance)
         session.commit()
+'''
+
+
+def create(session, model, Device):
+    instance = session.query(model).filter_by(id=Device.id).first()
+    if instance:
+        pass
+    else:
+        instance = Device
+        session.add(instance)
+        session.commit()
+
+
+def update(session, id, str):
+    if session.query(models.Device).get(id):
+        session.query(models.Device).filter_by(id=id).update({'time_last_measurement': str})
+        session.flush()
+        session.commit()
+        return {"status": True, "message": f"Record {id} deleted"}
+    else:
+        return {"status": False, "message": "No such record"}
+
+
+async def control_status():
+    while true:
+        await asyncio.sleep(10)
+
+
+def time_as_string(actual_time):
+    time_string = time.strftime("%m/%d/%Y, %H:%M:%S", actual_time)
+    return time_string
