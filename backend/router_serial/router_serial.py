@@ -26,6 +26,7 @@ router = FastAPI()
 
 Devices = []
 
+
 router.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,12 +45,18 @@ def get_db():
         db.close()
 
 
+
 class PrintLines(LineReader):
     _fut = None
 
     def connection_made(self, transport):
         super(PrintLines, self).connection_made(transport)
         sys.stdout.write('port opened\n')
+        with Session() as session:
+            for value in session.query(models.Device.id).distinct():
+                dbdevice = session.query(models.Device).get(value)
+                Devices.append(dbdevice)
+                print(Devices)
 
     def handle_line(self, data):
         sys.stdout.write('line received: {}\n'.format(repr(data)))
@@ -93,9 +100,6 @@ class PrintLines(LineReader):
                     Devices.pop(len(Devices) - 1)
                     with Session() as session:
                         update(session, devAttivo, time_as_string(time_misura))
-
-
-
 
             print(Devices)
             # manda gli eventi a mqtt
@@ -215,7 +219,7 @@ def time_as_string(actual_time):
 def sec_between_time(timestr1, timestr2):
     # ate = time_as_string(time.localtime())
     # convert string to datetimeformat
-    
+
     if timestr1 != timestr2:
         date1 = datetime.datetime.strptime(timestr1, "%d/%m/%Y, %H:%M:%S")
         date2 = datetime.datetime.strptime(timestr2, "%d/%m/%Y, %H:%M:%S")
@@ -236,12 +240,13 @@ async def control_status(delay, listdev):
         if listdev:
             for index, dev in enumerate(listdev):
                 print("check")
-                if sec_between_time(dev.time_last_measurement, time_as_string(time.localtime())) > delay / 2:
-                    print("off")
-                    with Session() as session:
-                        update_status(session, dev.id, "OFF")
-                else:
-                    print("on")
-                    with Session() as session:
-                        update_status(session, dev.id, "ON")
+                if dev.time_last_measurement:
+                    if sec_between_time(dev.time_last_measurement, time_as_string(time.localtime())) > delay / 2:
+                        print("off")
+                        with Session() as session:
+                            update_status(session, dev.id, "OFF")
+                    else:
+                        print("on")
+                        with Session() as session:
+                            update_status(session, dev.id, "ON")
 
