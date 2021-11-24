@@ -13,6 +13,7 @@ import TableHead from "@material-ui/core/TableHead";
 import TableRow from "@material-ui/core/TableRow";
 import Paper from "@material-ui/core/Paper";
 
+
 const GetDevices = (params) => {
     // GET
     const { data, loading } = useFetch(
@@ -20,7 +21,7 @@ const GetDevices = (params) => {
     );
     // console.log(data);
 
-    // DELETE
+    // BLINK
     async function Blink(url) {
         await fetch(url, { method: "GET" }).then(window.location.reload());
     }

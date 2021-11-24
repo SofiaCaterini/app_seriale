@@ -22,7 +22,7 @@ function PostDevice(props) {
                 network_id: params.formNetId,
                 name: params.formName,
                 location:params.formLocation,
-                tag: params.formTag,
+                time_last_measurement: params.formTag,
                 sensor_type: params.formSensorType,
                 characteristics: params.formChar,
             }),
@@ -69,7 +69,7 @@ function PostDevice(props) {
                 <br />
 
                 <TextField
-                    label="tag"
+                    label="time_last_measurement"
                     type="text"
                     name="formTag"
                     value={values.formTag}

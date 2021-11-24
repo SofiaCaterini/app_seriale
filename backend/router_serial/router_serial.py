@@ -81,25 +81,25 @@ class PrintLines(LineReader):
             time_misura = time.localtime()
             newDevice = Device(id=devAttivo, status="ON", time_last_measurement=time_as_string(time_misura),
                                sensor_type=typeactual)
-            # Devices.append(newDevice)
 
             Devices.append(newDevice)
+            if newDevice:
+                with Session() as session:
+                    create(session, Device, newDevice)
+
             for index, dev in enumerate(Devices):
-                if dev.id == devAttivo and dev.time_last_measurement == time_as_string(time_misura):
-                    with Session() as session:
-                        create(session, Device, newDevice)
                 if dev.id == devAttivo and dev.time_last_measurement != time_as_string(time_misura):
                     Devices[index] = newDevice
                     Devices.pop(len(Devices) - 1)
                     with Session() as session:
                         update(session, devAttivo, time_as_string(time_misura))
 
+
+
+
             print(Devices)
             # manda gli eventi a mqtt
 
-        else:
-
-            pass
 
     def connection_lost(self, exc):
         if exc:
@@ -184,6 +184,7 @@ def create(session, model, Device):
         instance = Device
         session.add(instance)
         session.commit()
+        session.refresh(instance)
 
 
 def update(session, id, str):
@@ -214,27 +215,33 @@ def time_as_string(actual_time):
 def sec_between_time(timestr1, timestr2):
     # ate = time_as_string(time.localtime())
     # convert string to datetimeformat
-    date1 = datetime.datetime.strptime(timestr1, "%d/%m/%Y, %H:%M:%S")
-    date2 = datetime.datetime.strptime(timestr2, "%d/%m/%Y, %H:%M:%S")
-    # convert datetime to timestamp
-    time1 = datetime.datetime.timestamp(date1)
-    time2 = datetime.datetime.timestamp(date2)
-    time1 = datetime.datetime.fromtimestamp(time1)
-    time2 = datetime.datetime.fromtimestamp(time2)
-    time_difference = time2 - time1
-    return time_difference.total_seconds()
+    
+    if timestr1 != timestr2:
+        date1 = datetime.datetime.strptime(timestr1, "%d/%m/%Y, %H:%M:%S")
+        date2 = datetime.datetime.strptime(timestr2, "%d/%m/%Y, %H:%M:%S")
+        # convert datetime to timestamp
+        time1 = datetime.datetime.timestamp(date1)
+        time2 = datetime.datetime.timestamp(date2)
+        time1 = datetime.datetime.fromtimestamp(time1)
+        time2 = datetime.datetime.fromtimestamp(time2)
+        time_difference = time2 - time1
+        return time_difference.total_seconds()
+    else:
+        return 1
 
 
 async def control_status(delay, listdev):
     while true:
         await asyncio.sleep(delay)
-        for index, dev in enumerate(listdev):
-            if sec_between_time(dev.time_last_measurement, time_as_string(time.localtime())) > delay / 2:
-                print("off")
-                with Session() as session:
-                    update_status(session, dev.id, "OFF")
-            else:
-                print("on")
-                with Session() as session:
-                    update_status(session, dev.id, "ON")
-        print("check")
+        if listdev:
+            for index, dev in enumerate(listdev):
+                print("check")
+                if sec_between_time(dev.time_last_measurement, time_as_string(time.localtime())) > delay / 2:
+                    print("off")
+                    with Session() as session:
+                        update_status(session, dev.id, "OFF")
+                else:
+                    print("on")
+                    with Session() as session:
+                        update_status(session, dev.id, "ON")
+
